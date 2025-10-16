@@ -1,0 +1,15 @@
+{
+  "name": "edge2",
+  "version": "1.0.0",
+  "description": "一个功能强大的基于 Cloudflare Workers/Pages 平台的网络工具，支持 VLESS 协议并提供灵活的订阅转换功能。该项目允许用户将 VLESS 配置信息转换为多种订阅格式（如 Clash、Singbox、Base64 等），便于在各类客户端中使用。",
+  "main": "brace_check.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "wrangler": "^4.43.0"
+  }
+}
