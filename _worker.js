@@ -466,12 +466,15 @@ class ErrorHandler {
     // 性能监控记录
     PerformanceMonitor.end(uuid, { success: false });
     
-    // 返回友好错误响应
+    // 返回详细错误响应
     const errorResponse = {
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred',
-        requestId: errorId
+        message: error.message || 'An unexpected error occurred',
+        stack: error.stack,
+        name: error.name,
+        requestId: errorId,
+        details: '详细错误信息已包含在响应中'
       }
     };
     
