@@ -613,19 +613,34 @@ let allowInsecure = '&allowInsecure=1';
 export default {
   // 主fetch处理函数
   async fetch(request, env, ctx) {
+    // 立即添加错误边界，确保任何全局异常都被捕获
+    const errorId = Date.now().toString(36) + Math.random().toString(36).substr(2);
     try {
       // 生成请求UUID
-      const uuid = this.generateRequestUUID();
+      const uuid = errorId;
       
       // 收集客户端信息
-      const clientInfo = this.collectClientInfo(request);
+      const clientInfo = this.collectClientInfo ? this.collectClientInfo(request) : {
+        userAgent: request?.headers?.get('User-Agent') || 'unknown',
+        ip: request?.headers?.get('CF-Connecting-IP') || request?.headers?.get('X-Forwarded-For') || 'unknown',
+        region: request?.cf?.region || 'unknown',
+        country: request?.cf?.country || 'unknown',
+        browser: 'unknown',
+        device: 'unknown'
+      };
       
-      // 开始性能监控
-      PerformanceMonitor.start(uuid, {
-        path: new URL(request.url).pathname,
-        method: request.method,
-        clientIP: clientInfo.ip
-      });
+      // 尝试开始性能监控，但添加错误处理
+      try {
+        if (typeof PerformanceMonitor === 'object' && PerformanceMonitor?.start) {
+          PerformanceMonitor.start(uuid, {
+            path: request?.url ? new URL(request.url).pathname : 'unknown',
+            method: request?.method || 'unknown',
+            clientIP: clientInfo?.ip || 'unknown'
+          });
+        }
+      } catch (monitorStartError) {
+        console.error(`[监控错误] 无法开始性能监控: ${monitorStartError?.message || 'Unknown error'}`);
+      }
       
       // 初始化环境变量
       this.initializeEnv(env);
@@ -767,8 +782,54 @@ export default {
       // 原有返回逻辑...
       
     } catch (error) {
-      // 全局错误处理
-      return ErrorHandler.handleError(error, request, uuid, env);
+      // 全局错误处理 - 确保即使ErrorHandler不可用也能返回错误
+      try {
+        if (typeof ErrorHandler === 'object' && ErrorHandler?.handleError) {
+          return ErrorHandler.handleError(error, request, uuid || errorId, env);
+        } else {
+          // 备用错误处理 - 当ErrorHandler不可用时
+          const fallbackErrorResponse = {
+            error: {
+              code: 'WORKER_EXCEPTION',
+              message: error?.message || 'An unexpected error occurred',
+              errorType: error?.name || 'Error',
+              stackTrace: error?.stack || 'No stack trace available',
+              requestId: uuid || errorId,
+              timestamp: new Date().toISOString(),
+              note: 'This is a fallback error response. ErrorHandler was not available.'
+            }
+          };
+          
+          console.error(`[严重错误] ID: ${errorId}, 消息: ${error?.message || 'Unknown error'}`);
+          console.error(`[错误堆栈] ${error?.stack || 'No stack trace'}`);
+          
+          return new Response(JSON.stringify(fallbackErrorResponse), {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Error-ID': errorId,
+              'X-Request-ID': uuid || errorId,
+              'X-Error-Message': encodeURIComponent(error?.message || 'Unknown error')
+            }
+          });
+        }
+      } catch (handlerError) {
+        // 终极错误处理 - 当所有错误处理机制都失败时
+        console.error(`[致命错误] 错误处理机制本身也失败了: ${handlerError?.message || 'Unknown error'}`);
+        return new Response(JSON.stringify({
+          error: {
+            code: 'FATAL_ERROR',
+            message: 'A critical error occurred and error handling failed',
+            requestId: errorId
+          }
+        }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Error-ID': errorId
+          }
+        });
+      }
     }
   },
   
