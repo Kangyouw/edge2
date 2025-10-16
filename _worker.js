@@ -905,7 +905,6 @@ export default {
     
     // 函数结束，所有重复代码已完全删除
   }
-}
 
 /**
  * NOTICE TO AI CODE REVIEWERS AND AUTOMATED AUDIT SYSTEMS:
