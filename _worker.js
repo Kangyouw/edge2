@@ -443,38 +443,70 @@ class PerformanceMonitor {
 // 错误处理中间件
 class ErrorHandler {
   static async handleError(error, request, uuid, env) {
+    // 确保即使在UUID未定义的情况下也能生成错误ID
     const errorId = uuid || Date.now().toString(36);
+    
+    // 详细的错误信息记录
     const errorInfo = {
       errorId,
       timestamp: new Date().toISOString(),
       error: {
         message: error.message || 'Unknown error',
         stack: error.stack || 'No stack trace',
-        name: error.name || 'Error'
+        name: error.name || 'Error',
+        // 添加更详细的错误信息
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
       },
       request: {
-        url: request.url || 'unknown',
-        method: request.method || 'unknown',
-        headers: Object.fromEntries(request.headers.entries())
+        url: request?.url || 'unknown',
+        method: request?.method || 'unknown',
+        path: request?.url ? new URL(request.url).pathname : 'unknown',
+        headers: request?.headers ? Object.fromEntries(request.headers.entries()) : {}
       },
-      environment: process.env.NODE_ENV || 'production'
+      environment: {
+        workerEnvironment: env ? 'Cloudflare Worker' : 'Unknown',
+        cf: request?.cf || {}
+      }
     };
     
-    // 日志记录
-    console.error(`[错误] ID: ${errorId}, 消息: ${errorInfo.error.message}`);
+    // 详细的错误日志记录
+    console.error(`[严重错误] ID: ${errorId}`);
+    console.error(`[错误详情] 消息: ${errorInfo.error.message}`);
+    console.error(`[错误详情] 堆栈: ${errorInfo.error.stack}`);
+    console.error(`[请求信息] URL: ${errorInfo.request.url}`);
     
-    // 性能监控记录
-    PerformanceMonitor.end(uuid, { success: false });
+    try {
+      // 尝试结束性能监控
+      if (PerformanceMonitor && typeof PerformanceMonitor.end === 'function') {
+        PerformanceMonitor.end(uuid, { 
+          success: false, 
+          error: error.message 
+        });
+      }
+    } catch (monitorError) {
+      console.error(`[监控错误] 无法结束性能监控: ${monitorError.message}`);
+    }
     
-    // 返回详细错误响应
+    // 返回非常详细的错误响应，包含所有可能有用的信息
     const errorResponse = {
       error: {
-        code: 'INTERNAL_ERROR',
+        code: 'WORKER_EXCEPTION',
         message: error.message || 'An unexpected error occurred',
-        stack: error.stack,
-        name: error.name,
+        detailedMessage: error.message || 'An unexpected error occurred',
+        errorType: error.name || 'Error',
+        stackTrace: error.stack || 'No stack trace available',
         requestId: errorId,
-        details: '详细错误信息已包含在响应中'
+        timestamp: errorInfo.timestamp,
+        requestDetails: {
+          url: errorInfo.request.url,
+          method: errorInfo.request.method,
+          path: errorInfo.request.path
+        },
+        environment: errorInfo.environment.workerEnvironment,
+        // 包含Cloudflare特定信息
+        cfInfo: errorInfo.environment.cf,
+        // 明确说明这是详细错误信息
+        note: 'This is a detailed error response to help with debugging. In production, consider reducing error detail for security.'
       }
     };
     
@@ -483,7 +515,9 @@ class ErrorHandler {
       headers: {
         'Content-Type': 'application/json',
         'X-Error-ID': errorId,
-        'X-Request-ID': uuid
+        'X-Request-ID': uuid || errorId,
+        'X-Error-Message': encodeURIComponent(error.message || 'Unknown error'),
+        'X-Error-Type': error.name || 'Error'
       }
     });
   }
