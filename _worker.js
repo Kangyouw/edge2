@@ -690,6 +690,8 @@ export default {
       // 原有逻辑处理...
       // 注意：这里保留原有处理逻辑，但会集成性能监控
       
+      // 添加fakeUserIDMD5的默认定义，避免变量未定义错误
+      const fakeUserIDMD5 = '00000000000000000000000000000000'; // 默认32位MD5值
       const fakeHostName = `${fakeUserIDMD5.slice(6, 9)}.${fakeUserIDMD5.slice(13, 19)}`;
 
       proxyIP = env.PROXYIP || env.proxyip || proxyIP;
@@ -4434,6 +4436,8 @@ async function 生成配置信息(userID, hostName, sub, UA, 请求CF反代IP, _
             fakeHostName = `${fakeHostName}.xyz`
         }
         console.log(`虚假HOST: ${fakeHostName}`);
+        // 添加fakeUserID的默认定义，避免变量未定义错误
+        const fakeUserID = '00000000-0000-0000-0000-000000000000'; // 默认UUID格式
         let url = `${subProtocol}://${sub}/sub?host=${fakeHostName}&uuid=${fakeUserID}&proxyip=${请求CF反代IP}&path=${encodeURIComponent(path)}&${atob('ZWRnZXR1bm5lbD1jbWxpdQ==')}`;
         let isBase64 = true;
 
